@@ -2,18 +2,26 @@ from glob import glob
 from six.moves import xrange
 import numpy as np
 import scipy.misc
+from astropy.io import fits
 
+class ImageGenerator:
+    def __init__(self, test_pattern, train_pattern, val_pattern):
+        self.test_pattern = test_pattern
+        self.train_pattern = train_pattern
+        self.val_pattern = val_pattern
+        self.is_grayscale = False
 
-class DataGenerator:
-    def __init__(self, pattern, is_grayscale):
-        self.pattern = pattern
-        self.is_grayscale = is_grayscale
+    def train_data(self):
+        return glob(self.train_pattern)
 
-    def data(self):
-        return glob(self.pattern)
+    def test_data(self):
+        return glob(self.test_pattern)
 
-    def batch_generator(self, train_size, batch_size):
-        files = self.data()
+    def val_data(self):
+        return glob(self.val_pattern)
+
+    def train_batch_generator(self, train_size, batch_size):
+        files = self.train_data()
         batch_idxs = min(len(files), train_size) // batch_size
 
         for idx in xrange(0, batch_idxs):
@@ -70,3 +78,65 @@ class DataGenerator:
             return scipy.misc.imread(path, flatten=True).astype(np.float)
         else:
             return scipy.misc.imread(path).astype(np.float)
+
+
+def dataset_chunked(start=0, end=100, split=32):
+    """yields the dataset where the images are plit in chunks. split var controls the amoun of splits per axes"""
+    for i in range(start, end):
+        input_ = "data/meerkat_random_skies_{:04d}-dirty.fits".format(i)
+        input_hdu = fits.open(input_)
+        input_data = input_hdu[0].data.squeeze()
+        target = "data/skymodel_{:04d}.txt.fits".format(i)
+        target_hdu = fits.open(target)
+        target_data = target_hdu[0].data.squeeze()
+        skip = input_data.shape[0] // split
+        input_list = []
+        target_list = []
+        for i in range(split):
+            for j in range(split):
+                input_chunk = input_data[i * skip:(i * skip) + skip, j * skip:(j * skip) + skip]
+                target_chunk = target_data[i * skip:(i * skip) + skip, j * skip:(j * skip) + skip]
+                yield input_chunk.reshape(1, input_chunk.size), target_chunk.reshape(1, target_chunk.size)
+                #input_list.append(input_chunk.reshape(1, input_chunk.size))
+                #target_list.append(target_chunk.reshape(1, target_chunk.size))
+        #yield np.concatenate(input_list), np.concatenate(target_list)
+
+
+
+class FitsGenerator:
+    def __init__(self,
+                 input_pattern="data/meerkat_random_skies_*-dirty.fits",
+                 target_pattern="data/skymodel_*.txt.fits", split=16):
+        self.input_files = glob(input_pattern)
+        self.target_files = glob(target_pattern)
+        assert len(self.input_files) == len(self.target_files)
+
+        # find out size data
+        input_ = self.input_files[0]
+        input_hdu = fits.open(input_)
+        input_data = input_hdu[0].data.squeeze()
+
+        target = self.target_files[0]
+        target_hdu = fits.open(target)
+        target_data = target_hdu[0].data.squeeze()
+
+        assert input_data.shape() == target_data.shape()
+
+        self.total_data_size = self.input_files * split * split
+
+        # split data in train and test
+        border1 = self.total_data_size // 3
+        border2 = (self.total_data_size // 3) * 2
+
+        self._train_data = range(0, border1)
+        self._test_data = range(border1, border2)
+        self._val_data = range(border2, self.total_data_size)
+
+    def train_data(self):
+        return self._train_data
+
+    def test_data(self):
+        return self._test_data
+
+    def val_data(self):
+        return self._val_data

@@ -1,6 +1,6 @@
 import argparse
 import os
-
+from datasource import ImageGenerator
 import tensorflow as tf
 
 from model import pix2pix
@@ -50,10 +50,15 @@ def main(_):
     if not os.path.exists(args.test_dir):
         os.makedirs(args.test_dir)
 
+    data_gen = ImageGenerator(val_pattern='./datasets/{}/val/*.jpg'.format(args.dataset_name),
+                              train_pattern='./datasets/{}/train/*.jpg'.format(args.dataset_name),
+                              test_pattern='./datasets/{}/test/*.jpg'.format(args.dataset_name)
+                              )
+
     with tf.Session() as sess:
         model = pix2pix(sess, image_size=args.fine_size, batch_size=args.batch_size,
                         output_size=args.fine_size, dataset_name=args.dataset_name,
-                        checkpoint_dir=args.checkpoint_dir)
+                        checkpoint_dir=args.checkpoint_dir, data_gen=data_gen)
 
         if args.phase == 'train':
             model.train(args)

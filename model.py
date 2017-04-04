@@ -7,13 +7,12 @@ import numpy as np
 import tensorflow as tf
 from six.moves import xrange
 
-from datasource import DataGenerator
 from ops import deconv2d, batch_norm, conv2d, lrelu, linear
 from utils import save_images
 
 
 class pix2pix(object):
-    def __init__(self, sess, image_size=256,
+    def __init__(self, sess, data_gen, image_size=256,
                  batch_size=1, sample_size=1, output_size=256,
                  gf_dim=64, df_dim=64, L1_lambda=100,
                  input_c_dim=3, output_c_dim=3, dataset_name='facades',
@@ -67,6 +66,7 @@ class pix2pix(object):
 
         self.dataset_name = dataset_name
         self.checkpoint_dir = checkpoint_dir
+        self.data_gen = data_gen
         self.build_model()
 
     def build_model(self):
@@ -115,11 +115,11 @@ class pix2pix(object):
         self.saver = tf.train.Saver()
 
     def load_random_samples(self):
-        data_gen = DataGenerator('./datasets/{}/val/*.jpg'.format(self.dataset_name), is_grayscale=self.is_grayscale)
-        data = np.random.choice(data_gen.data(), self.batch_size)
-        sample = [data_gen.load_data(sample_file) for sample_file in data]
 
-        if (self.is_grayscale):
+        data = np.random.choice(self.data_gen.val_data(), self.batch_size)
+        sample = [self.data_gen.load_data(sample_file) for sample_file in data]
+
+        if (self.data_gen.is_grayscale):
             sample_images = np.array(sample).astype(np.float32)[:, :, :, None]
         else:
             sample_images = np.array(sample).astype(np.float32)
@@ -159,10 +159,7 @@ class pix2pix(object):
             print(" [!] Load failed...")
 
         for epoch in xrange(args.epoch):
-            data_gen = DataGenerator('./datasets/{}/train/*.jpg'.format(self.dataset_name),
-                                     is_grayscale=self.is_grayscale)
-
-            for batch_images, idx, batch_idxs in data_gen.batch_generator(args.train_size, self.batch_size):
+            for batch_images, idx, batch_idxs in self.data_gen.train_batch_generator(args.train_size, self.batch_size):
                  # Update D network
                 _, summary_str = self.sess.run([d_optim, self.d_sum],
                                                feed_dict={self.real_data: batch_images})
@@ -406,9 +403,7 @@ class pix2pix(object):
         init_op = tf.global_variables_initializer()
         self.sess.run(init_op)
 
-        data_gen = DataGenerator('./datasets/{}/val/*.jpg'.format(self.dataset_name),
-                                 is_grayscale=self.is_grayscale)
-        sample_files = data_gen.data()
+        sample_files = self.data_gen.val_data()
 
         # sort testing input
         n = [int(i) for i in map(lambda x: x.split('/')[-1].split('.jpg')[0], sample_files)]
@@ -416,9 +411,9 @@ class pix2pix(object):
 
         # load testing input
         print("Loading testing images ...")
-        sample = [data_gen.load_data(sample_file, is_test=True) for sample_file in sample_files]
+        sample = [self.data_gen.load_data(sample_file, is_test=True) for sample_file in sample_files]
 
-        if self.is_grayscale:
+        if self.data_gen.is_grayscale:
             sample_images = np.array(sample).astype(np.float32)[:, :, :, None]
         else:
             sample_images = np.array(sample).astype(np.float32)
