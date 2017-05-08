@@ -140,3 +140,42 @@ class FitsGenerator:
 
     def val_data(self):
         return self._val_data
+
+    def batch_generator(self, start=None, end=None):
+        i_length = 20
+        j_length = 20
+
+        if start is not None:
+            i_start, j_start = divmod(start, i_length)
+        else:
+            i_start = 0
+            j_length = 0
+
+        if end is not None:
+            i_end, j_final_end = divmod(end, i_length)
+        else:
+            i_end = i_length
+
+        j_end = j_length
+        i_end = min(i_end, i_length)
+
+        for i in range(i_start, i_end + 1):
+            if i == i_end:
+                j_end = j_final_end
+            for j in range(j_start, j_end):
+                yield i, j
+
+    def train_batch_generator(self, train_size, batch_size):
+        files = self.train_data()
+        batch_idxs = min(len(files), train_size) // batch_size
+
+        for idx in xrange(0, batch_idxs):
+            batch_files = files[idx * batch_size:(idx + 1) * batch_size]
+            batch = [self.load_data(batch_file) for batch_file in batch_files]
+            batch_images = np.array(batch).astype(np.float32)[:, :, :, None]
+            yield batch_images, idx, batch_idxs
+
+
+
+
+
